@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Cảnh Báo Quá Tải - 3 Phòng Độc Lập</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .room-panel { border-radius: 12px; background: #ffffff; box-shadow: 0 4px 8px rgba(0,0,0,0.08); padding: 16px; margin-bottom: 24px; border-top: 5px solid #0d6efd; }
+        .room-panel.r2-border { border-top-color: #198754; }
+        .room-panel.r3-border { border-top-color: #6f42c1; }
+        .chart-box { background: #fafafa; border: 1px solid #eaeaea; border-radius: 8px; padding: 10px; margin-top: 12px; }
+        .status-safe { background-color: #28a745; color: white; }
+        .status-warning { background-color: #ffc107; color: #212529; }
+        .status-danger { background-color: #dc3545; color: white; animation: blinker 1s linear infinite; }
+        .val-text { font-size: 1.5rem; font-weight: 700; }
+        .advice-box { min-height: 48px; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 500; border-radius: 6px; padding: 8px; background: #f8f9fa; }
+        @keyframes blinker { 50% { opacity: 0.65; } }
+    </style>
+</head>
+<body>
+    <div class="container-fluid px-4 mt-3">
+        <h2 class="text-center mb-3 text-primary fw-bold">HỆ THỐNG GIÁM SÁT SỰ CỐ LƯỚI ĐIỆN HẠ THẾ (3 PHÒNG ĐỘC LẬP)</h2>
+        
+        <div class="row mb-4">
+            <div class="col-12 text-center">
+                <button id="btnStart" class="btn btn-primary px-4 fw-bold mx-1" onclick="toggleSim('start')">▶ Khởi Động Máy Đo</button>
+                <button id="btnStop" class="btn btn-danger px-4 fw-bold mx-1" onclick="toggleSim('stop')" disabled>■ Dừng Lấy Mẫu</button>
+                <button class="btn btn-warning px-4 fw-bold mx-1" onclick="downloadPDFReport()">📄 Xuất Báo Cáo Phân Tích (PDF)</button>
+                <a href="/internal" target="_blank" class="btn btn-info px-4 fw-bold mx-1">🔍 Mở Chế Độ Phân Tích Nội Bộ</a>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- CỘT 1: PHÒNG HỌC LỚN -->
+            <div class="col-lg-4">
+                <div class="room-panel">
+                    <h4 class="text-center text-primary fw-bold mb-3">PHÒNG HỌC LỚN</h4>
+                    <div class="row text-center mb-2">
+                        <div class="col-6">
+                            <div class="p-2 border rounded bg-light">
+                                <small class="text-muted d-block">Dòng Điện (I)</small>
+                                <span id="r1-i" class="val-text text-danger">0.0 A</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 border rounded bg-light">
+                                <small class="text-muted d-block">Điện Áp (U)</small>
+                                <span id="r1-u" class="val-text text-primary">0.0 V</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="r1-box" class="p-2 text-center rounded fw-bold bg-secondary text-white mb-2">TRẠNG THÁI: ĐANG CHỜ</div>
+                    <div id="r1-adv" class="advice-box text-muted text-center mb-2">Chưa có dữ liệu đo.</div>
+
+                    <div class="chart-box">
+                        <h6 class="text-center text-danger fw-bold mb-1">Đồ Thị Dòng Điện - Phòng Học Lớn (A)</h6>
+                        <canvas id="r1CurrentChart" height="140"></canvas>
+                    </div>
+                    <div class="chart-box">
+                        <h6 class="text-center text-primary fw-bold mb-1">Đồ Thị Điện Áp - Phòng Học Lớn (V)</h6>
+                        <canvas id="r1VoltageChart" height="140"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CỘT 2: PHÒNG HỌC NHỎ -->
+            <div class="col-lg-4">
+                <div class="room-panel r2-border">
+                    <h4 class="text-center text-success fw-bold mb-3">PHÒNG HỌC NHỎ</h4>
+                    <div class="row text-center mb-2">
+                        <div class="col-6">
+                            <div class="p-2 border rounded bg-light">
+                                <small class="text-muted d-block">Dòng Điện (I)</small>
+                                <span id="r2-i" class="val-text text-danger">0.0 A</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 border rounded bg-light">
+                                <small class="text-muted d-block">Điện Áp (U)</small>
+                                <span id="r2-u" class="val-text text-primary">0.0 V</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="r2-box" class="p-2 text-center rounded fw-bold bg-secondary text-white mb-2">TRẠNG THÁI: ĐANG CHỜ</div>
+                    <div id="r2-adv" class="advice-box text-muted text-center mb-2">Chưa có dữ liệu đo.</div>
+
+                    <div class="chart-box">
+                        <h6 class="text-center text-danger fw-bold mb-1">Đồ Thị Dòng Điện - Phòng Học Nhỏ (A)</h6>
+                        <canvas id="r2CurrentChart" height="140"></canvas>
+                    </div>
+                    <div class="chart-box">
+                        <h6 class="text-center text-primary fw-bold mb-1">Đồ Thị Điện Áp - Phòng Học Nhỏ (V)</h6>
+                        <canvas id="r2VoltageChart" height="140"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CỘT 3: PHÒNG BẢO VỆ -->
+            <div class="col-lg-4">
+                <div class="room-panel r3-border">
+                    <h4 class="text-center fw-bold mb-3" style="color: #6f42c1;">PHÒNG BẢO VỆ</h4>
+                    <div class="row text-center mb-2">
+                        <div class="col-6">
+                            <div class="p-2 border rounded bg-light">
+                                <small class="text-muted d-block">Dòng Điện (I)</small>
+                                <span id="r3-i" class="val-text text-danger">0.0 A</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 border rounded bg-light">
+                                <small class="text-muted d-block">Điện Áp (U)</small>
+                                <span id="r3-u" class="val-text text-primary">0.0 V</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="r3-box" class="p-2 text-center rounded fw-bold bg-secondary text-white mb-2">TRẠNG THÁI: ĐANG CHỜ</div>
+                    <div id="r3-adv" class="advice-box text-muted text-center mb-2">Chưa có dữ liệu đo.</div>
+
+                    <div class="chart-box">
+                        <h6 class="text-center text-danger fw-bold mb-1">Đồ Thị Dòng Điện - Phòng Bảo Vệ (A)</h6>
+                        <canvas id="r3CurrentChart" height="140"></canvas>
+                    </div>
+                    <div class="chart-box">
+                        <h6 class="text-center text-primary fw-bold mb-1">Đồ Thị Điện Áp - Phòng Bảo Vệ (V)</h6>
+                        <canvas id="r3VoltageChart" height="140"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        const roomCharts = {};
+
+        function createSingleChart(canvasId, labelText, borderColor, bgColor, maxY, stepY) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: labelText,
+                        data: [],
+                        borderColor: borderColor,
+                        backgroundColor: bgColor,
+                        borderWidth: 2,
+                        pointRadius: 2,
+                        fill: true,
+                        tension: 0.2
+                    }]
+                },
+                options: {
+                    animation: { duration: 0 },
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: true },
+                        y: {
+                            min: 0,
+                            max: maxY,
+                            ticks: { stepSize: stepY }
+                        }
+                    }
+                }
+            });
+        }
+
+        function initCharts() {
+            // Khởi tạo 6 biểu đồ độc lập, gốc tọa độ đều bắt đầu từ 0
+            roomCharts.r1_i = createSingleChart('r1CurrentChart', 'Dòng điện (A)', '#dc3545', 'rgba(220, 53, 69, 0.15)', 70, 10);
+            roomCharts.r1_u = createSingleChart('r1VoltageChart', 'Điện áp (V)', '#0d6efd', 'rgba(13, 110, 253, 0.15)', 250, 50);
+
+            roomCharts.r2_i = createSingleChart('r2CurrentChart', 'Dòng điện (A)', '#dc3545', 'rgba(220, 53, 69, 0.15)', 60, 10);
+            roomCharts.r2_u = createSingleChart('r2VoltageChart', 'Điện áp (V)', '#0d6efd', 'rgba(13, 110, 253, 0.15)', 250, 50);
+
+            roomCharts.r3_i = createSingleChart('r3CurrentChart', 'Dòng điện (A)', '#dc3545', 'rgba(220, 53, 69, 0.15)', 40, 10);
+            roomCharts.r3_u = createSingleChart('r3VoltageChart', 'Điện áp (V)', '#0d6efd', 'rgba(13, 110, 253, 0.15)', 250, 50);
+        }
+
+        window.onload = initCharts;
+
+        function toggleSim(action) {
+            fetch('/toggle_simulation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            }).then(res => res.json()).then(data => {
+                if (action === 'start') {
+                    isRunning = true;
+                    document.getElementById('btnStart').disabled = true;
+                    document.getElementById('btnStop').disabled = false;
+
+                    Object.values(roomCharts).forEach(chart => {
+                        chart.data.labels = [];
+                        chart.data.datasets[0].data = [];
+                        chart.update();
+                    });
+                } else {
+                    isRunning = false;
+                    document.getElementById('btnStart').disabled = false;
+                    document.getElementById('btnStop').disabled = true;
+                }
+            });
+        }
+
+        function pushPointToChart(chart, label, value) {
+            chart.data.labels.push(label);
+            chart.data.datasets[0].data.push(value);
+            if (chart.data.labels.length > 15) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            chart.update();
+        }
+
+        function updateRoomPanel(roomKey, data, timestamp) {
+            document.getElementById(`${roomKey}-i`).innerText = data.current.toFixed(1) + ' A';
+            document.getElementById(`${roomKey}-u`).innerText = data.voltage.toFixed(1) + ' V';
+            document.getElementById(`${roomKey}-adv`).innerText = data.advice;
+
+            const box = document.getElementById(`${roomKey}-box`);
+            box.className = "p-2 text-center rounded fw-bold mb-2 ";
+            if (data.status === "Danger") {
+                box.classList.add("status-danger");
+                box.innerText = "TRẠNG THÁI: NGUY HIỂM";
+            } else if (data.status === "Warning") {
+                box.classList.add("status-warning");
+                box.innerText = "TRẠNG THÁI: CẢNH BÁO";
+            } else {
+                box.classList.add("status-safe");
+                box.innerText = "TRẠNG THÁI: AN TOÀN";
+            }
+
+            pushPointToChart(roomCharts[`${roomKey}_i`], timestamp, data.current);
+            pushPointToChart(roomCharts[`${roomKey}_u`], timestamp, data.voltage);
+        }
+
+        const socket = io();
+
+        socket.on('new_sensor_data', function(msg) {
+            if (!isRunning) return;
+            updateRoomPanel("r1", msg.r1, msg.timestamp);
+            updateRoomPanel("r2", msg.r2, msg.timestamp);
+            updateRoomPanel("r3", msg.r3, msg.timestamp);
+        });
+
+        function downloadPDFReport() {
+            fetch('/get_report')
+            .then(res => res.json())
+            .then(data => {
+                let now = new Date();
+                let element = document.createElement('div');
+                element.style.fontFamily = "'Times New Roman', Times, serif";
+                element.style.fontSize = "13pt";
+                element.style.lineHeight = "1.5";
+                element.style.color = "#000";
+                element.style.padding = "20px";
+                
+                let logHTML = data.event_log.length === 0 
+                    ? "<li>Hệ thống vận hành an toàn trên toàn bộ 3 phòng, không ghi nhận sự cố.</li>" 
+                    : data.event_log.map(log => `<li>${log}</li>`).join('');
+
+                element.innerHTML = `
+                    <h2 style="text-align: center; font-size: 16pt; font-weight: bold; margin-bottom: 20px;">BÁO CÁO GIÁM SÁT QUÁ TẢI LƯỚI ĐIỆN HẠ THẾ</h2>
+                    <p><strong>Thời điểm xuất báo cáo:</strong> Ngày ${now.toLocaleDateString('vi-VN')} lúc ${now.toLocaleTimeString('vi-VN')}</p>
+                    
+                    <p style="margin-top: 15px; font-weight: bold; text-decoration: underline;">1. TỔNG QUAN VẬN HÀNH</p>
+                    <p>Hệ thống đã thu thập số liệu trực tiếp tổng cộng ${data.total_runtime} giây cho 3 khu vực phụ tải độc lập.</p>
+                    
+                    <p style="margin-top: 15px; font-weight: bold; text-decoration: underline;">2. THỐNG KÊ CHI TIẾT TỪNG PHÒNG</p>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; text-align: center;" border="1">
+                        <tr style="background-color: #f2f2f2; font-weight: bold;">
+                            <td style="padding: 8px;">Khu vực</td>
+                            <td style="padding: 8px;">Ngưỡng Cảnh báo</td>
+                            <td style="padding: 8px;">Ngưỡng Nguy hiểm</td>
+                            <td style="padding: 8px;">Thời gian An toàn (s)</td>
+                            <td style="padding: 8px;">Thời gian Cảnh báo (s)</td>
+                            <td style="padding: 8px;">Thời gian Nguy hiểm (s)</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;">Phòng Học Lớn</td>
+                            <td>35A</td><td>50A</td><td>${data.rooms.r1.safe}</td><td>${data.rooms.r1.warn}</td><td>${data.rooms.r1.danger}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;">Phòng Học Nhỏ</td>
+                            <td>25A</td><td>40A</td><td>${data.rooms.r2.safe}</td><td>${data.rooms.r2.warn}</td><td>${data.rooms.r2.danger}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;">Phòng Bảo Vệ</td>
+                            <td>15A</td><td>25A</td><td>${data.rooms.r3.safe}</td><td>${data.rooms.r3.warn}</td><td>${data.rooms.r3.danger}</td>
+                        </tr>
+                    </table>
+
+                    <p style="margin-top: 15px; font-weight: bold; text-decoration: underline;">3. NHẬT KÝ SỰ CỐ GHI NHẬN (NGÀY & GIỜ):</p>
+                    <ul style="margin-top: 5px;">
+                        ${logHTML}
+                    </ul>
+                    
+                    <hr style="margin: 20px 0; border: 1px solid black;">
+                    <p style="font-weight: bold;">KẾT LUẬN & ĐỀ XUẤT:</p>
+                    <p style="margin-top: 5px; text-align: justify;">Các khu vực phụ tải đã được giám sát độc lập với ngưỡng bảo vệ riêng biệt. Đề nghị Bộ phận Kỹ thuật kiểm tra các khung giờ xảy ra cảnh báo và quá tải nguy hiểm tại từng phòng để phân bổ lại phụ tải hợp lý.</p>
+                `;
+
+                let opt = {
+                    margin:       15,
+                    filename:     'Bao_Cao_Giam_Sat_3_Phong.pdf',
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2 },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                html2pdf().set(opt).from(element).save().then(() => {
+                    Swal.fire({ icon: 'success', title: 'Hoàn tất', text: 'Báo cáo PDF tổng hợp 3 phòng đã được tải xuống!'});
+                });
+            });
+        }
+    </script>
+</body>
+</html>

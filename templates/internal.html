@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Phân Tích Nội Bộ Lưới Điện 1 Pha</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card { border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h2 class="text-center mb-4 text-primary fw-bold">CHẾ ĐỘ PHÂN TÍCH NỘI BỘ </h2>
+        
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card p-4">
+                    <h5 class="text-secondary mb-3"> Nhập Dữ Liệu Thông Số Đo </h5>
+                    <div class="input-group mb-3">
+                        <input type="file" class="form-control" id="excelFile" accept=".xlsx, .xls, .csv">
+                        <button class="btn btn-success fw-bold px-4" onclick="uploadAndAnalyze()">Tải Lên </button>
+                    </div>
+                    <button id="btnDownloadPDF" class="btn btn-warning fw-bold w-100" style="display: none;" onclick="downloadPDFReport()"> Xuất Báo Cáo Phân Tích </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row" id="chartSection" style="display: none;">
+            <div class="col-md-12 mb-3">
+                <div class="card p-3 bg-white border-primary">
+                    <h5 class="text-dark mb-0 text-center">
+                        Kết quả quét <span id="txtTotal" class="fw-bold text-primary">0</span> giây: 
+                        An toàn <span id="txtSafe" class="fw-bold text-success">0</span> giây | 
+                        Cảnh báo <span id="txtWarn" class="fw-bold text-warning">0</span> đợt | 
+                        Nguy hiểm <span id="txtDang" class="fw-bold text-danger">0</span> đợt
+                    </h5>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card p-3">
+                    <h5 class="text-center text-secondary">Biểu Đồ Lịch Sử Dòng Điện (A)</h5>
+                    <canvas id="currentChart" height="150"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card p-3">
+                    <h5 class="text-center text-secondary">Biểu Đồ Lịch Sử Điện Áp (V)</h5>
+                    <canvas id="voltageChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentChart, voltageChart;
+        let globalReportData = null;
+
+        function initCharts() {
+            const commonOptions = { animation: { duration: 600 }, scales: { x: { display: true } } };
+            
+            const ctxC = document.getElementById('currentChart').getContext('2d');
+            currentChart = new Chart(ctxC, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 0, suggestedMax: 60, ticks: { stepSize: 10 } } } }
+            });
+
+            const ctxV = document.getElementById('voltageChart').getContext('2d');
+            voltageChart = new Chart(ctxV, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 0, max: 250, ticks: { stepSize: 50 } } } }
+            });
+        }
+
+        window.onload = initCharts;
+
+        function uploadAndAnalyze() {
+            let fileInput = document.getElementById('excelFile').files[0];
+            if (!fileInput) { 
+                Swal.fire({ icon: 'warning', title: 'Thiếu file', text: 'Vui lòng chọn file Excel kịch bản đo!'});
+                return; 
+            }
+            
+            Swal.fire({ title: 'Đang phân tích...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
+
+            let formData = new FormData();
+            formData.append("file", fileInput);
+
+            fetch('/analyze_1phase', { method: "POST", body: formData })
+            .then(response => response.json())
+            .then(data => {
+                if(data.success) {
+                    Swal.close();
+                    document.getElementById('chartSection').style.display = 'flex';
+                    document.getElementById('btnDownloadPDF').style.display = 'block';
+                    
+                    globalReportData = data.report_data;
+
+                    document.getElementById('txtTotal').innerText = globalReportData.total_runtime;
+                    document.getElementById('txtSafe').innerText = globalReportData.safe_count;
+                    document.getElementById('txtWarn').innerText = globalReportData.warning_count;
+                    document.getElementById('txtDang').innerText = globalReportData.danger_count;
+
+                    currentChart.data.labels = data.labels;
+                    currentChart.data.datasets = [{ label: 'Dòng điện (A)', data: data.I_val, borderColor: '#dc3545', backgroundColor: 'rgba(220, 53, 69, 0.2)', borderWidth: 2, pointRadius: 1, fill: true, tension: 0.2 }];
+                    currentChart.update();
+
+                    voltageChart.data.labels = data.labels;
+                    voltageChart.data.datasets = [{ label: 'Điện áp (V)', data: data.U_val, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.2)', borderWidth: 2, pointRadius: 1, fill: true, tension: 0.2 }];
+                    voltageChart.update();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Lỗi', text: data.error });
+                }
+            });
+        }
+
+        function downloadPDFReport() {
+            if (!globalReportData) return;
+            
+            let now = new Date();
+            let element = document.createElement('div');
+            element.style.fontFamily = "'Times New Roman', Times, serif";
+            element.style.fontSize = "13pt";
+            element.style.lineHeight = "1.5";
+            element.style.color = "#000";
+            element.style.padding = "20px";
+            
+            let logHTML = globalReportData.event_log.length === 0 
+                ? "<li>Hệ thống vận hành an toàn trong suốt chu kỳ đo, không ghi nhận sự cố.</li>" 
+                : globalReportData.event_log.map(log => `<li>${log}</li>`).join('');
+
+            element.innerHTML = `
+                <h2 style="text-align: center; font-size: 16pt; font-weight: bold; margin-bottom: 20px;">BÁO CÁO PHÂN TÍCH NỘI BỘ LƯỚI ĐIỆN HẠ THẾ</h2>
+                <p><strong>Thời điểm xuất báo cáo:</strong> Ngày ${now.toLocaleDateString('vi-VN')} lúc ${now.toLocaleTimeString('vi-VN')}</p>
+                <p><strong>Chế độ vận hành:</strong> Phân tích dữ liệu lịch sử từ tệp Excel đo đạc.</p>
+                
+                <p style="margin-top: 15px; font-weight: bold; text-decoration: underline;">1. TỔNG QUAN VẬN HÀNH</p>
+                <ul style="margin-top: 5px;">
+                    <li>Tổng thời gian dữ liệu phân tích: ${globalReportData.total_runtime} giây</li>
+                    <li>Tổng thời gian duy trì trạng thái AN TOÀN: ${globalReportData.safe_count} giây</li>
+                </ul>
+                
+                <p style="margin-top: 15px; font-weight: bold; text-decoration: underline;">2. THỐNG KÊ SỰ CỐ</p>
+                <ul style="margin-top: 5px;">
+                    <li>Số đợt CẢNH BÁO (Chớm quá tải &gt; 25A): ${globalReportData.warning_count} đợt</li>
+                    <li>Số đợt NGUY HIỂM (Quá tải nghiêm trọng &gt; 40A): ${globalReportData.danger_count} đợt</li>
+                </ul>
+
+                <p style="margin-top: 15px; font-weight: bold; text-decoration: underline;">3. NHẬT KÝ THỜI GIAN SỰ CỐ CHI TIẾT (NGÀY & GIỜ):</p>
+                <ul style="margin-top: 5px;">
+                    ${logHTML}
+                </ul>
+                
+                <hr style="margin: 20px 0; border: 1px solid black;">
+                <p style="font-weight: bold;">KẾT LUẬN & KHUYẾN NGHỊ:</p>
+                <p style="margin-top: 5px; text-align: justify;">Hệ thống đã hoàn tất rà soát dữ liệu lịch sử lưới điện hạ thế. Căn cứ vào các mốc ngày giờ xảy ra cảnh báo và quá tải nguy hiểm nêu trên, đề nghị Bộ phận Kỹ thuật kiểm tra phụ tải tại các khung giờ cao điểm và điều chỉnh san tải kịp thời để đảm bảo an toàn vận hành.</p>
+            `;
+
+            let opt = {
+              margin:       15,
+              filename:     'Bao_Cao_Phan_Tich_Noi_Bo_Luoi_Dien.pdf',
+              image:        { type: 'jpeg', quality: 0.98 },
+              html2canvas:  { scale: 2 },
+              jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                Swal.fire({ icon: 'success', title: 'Hoàn tất', text: 'Báo cáo PDF (Times New Roman, cỡ 13, đầy đủ ngày giờ) đã được tải về máy!'});
+            });
+        }
+    </script>
+</body>
+</html>
