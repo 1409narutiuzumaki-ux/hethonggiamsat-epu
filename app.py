@@ -7,6 +7,7 @@ import webbrowser
 import random
 import os
 import pandas as pd
+import requests
 from openpyxl.styles import Font, Alignment
 
 app = Flask(__name__)
@@ -15,7 +16,28 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 is_simulating = False
 simulation_thread = None
 
-# Cấu hình độc lập cho từng phòng
+# ================= CẤU HÌNH TELEGRAM =================
+# HÃY THAY THẾ BẰNG MÃ BẠN VỪA LẤY ĐƯỢC TỪ TELEGRAM:
+TELEGRAM_TOKEN = "8704242215:AAGEWr6T2R9xYfw4cD5vDfcDudcDpjXPCtg"
+TELEGRAM_CHAT_ID = "5451991152"
+
+def send_telegram_alert(message):
+    """Hàm chạy ngầm gửi tin nhắn đến Telegram"""
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID or "THAY_" in TELEGRAM_TOKEN:
+        return
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML"
+    }
+    try:
+        requests.post(url, json=payload, timeout=3)
+    except Exception as e:
+        print("Lỗi gửi Telegram:", e)
+# =====================================================
+
 ROOM_CONFIGS = {
     "r1": {
         "name": "Phòng Học Lớn", 
@@ -64,6 +86,7 @@ def create_clean_sample_excel():
         u_val = round(225.0 - (base_i * 0.3) + random.uniform(-0.3, 0.3), 1)
         data.append([t_str, u_val, i_val])
     df = pd.DataFrame(data, columns=["Thời gian", "Điện áp (V)", "Dòng điện (A)"])
+    
     with pd.ExcelWriter(SAMPLE_EXCEL_PATH, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name="DuLieuDo")
         ws = writer.sheets["DuLieuDo"]
@@ -126,15 +149,21 @@ def run_simulation():
             elif status == "Danger": history_stats["rooms"][r_key]["danger"] += 1
             
             last = history_stats["rooms"][r_key]["last"]
+            
+            # --- KHI TRẠNG THÁI THAY ĐỔI -> BẮN THÔNG BÁO TELEGRAM ---
             if status != last:
                 ts = time.strftime("%d/%m/%Y %H:%M:%S")
                 r_name = cfg["name"]
                 if status == "Warning":
                     history_stats["event_log"].append(f"[{ts}] {r_name}: Cảnh báo quá tải ({c_val}A)")
+                    threading.Thread(target=send_telegram_alert, args=(f"⚠️ <b>CẢNH BÁO QUÁ TẢI</b>\n📍 Khu vực: {r_name}\n⚡ Dòng điện: {c_val}A\n⏰ Thời gian: {ts}",)).start()
                 elif status == "Danger":
                     history_stats["event_log"].append(f"[{ts}] {r_name}: NGUY HIỂM CHÁY NỔ ({c_val}A)")
+                    threading.Thread(target=send_telegram_alert, args=(f"🚨 <b>NGUY HIỂM CHÁY NỔ</b>\n📍 Khu vực: {r_name}\n⚡ Dòng điện: {c_val}A vượt ngưỡng!\n❌ Yêu cầu ngắt aptomat ngay lập tức!\n⏰ Thời gian: {ts}",)).start()
                 elif status == "Safe" and last != "Safe":
                     history_stats["event_log"].append(f"[{ts}] {r_name}: Đã an toàn trở lại.")
+                    threading.Thread(target=send_telegram_alert, args=(f"✅ <b>HỆ THỐNG ỔN ĐỊNH</b>\n📍 Khu vực: {r_name}\n⚡ Dòng điện đã giảm xuống: {c_val}A\n⏰ Thời gian: {ts}",)).start()
+                    
             history_stats["rooms"][r_key]["last"] = status
             
         latest_data = {
@@ -155,12 +184,14 @@ def toggle_simulation():
         if not is_simulating:
             history_stats = init_history()
             is_simulating = True
+            threading.Thread(target=send_telegram_alert, args=("▶️ <b>HỆ THỐNG GIÁM SÁT ĐÃ KHỞI ĐỘNG</b>\nBắt đầu lấy mẫu dữ liệu 3 phòng...",)).start()
             simulation_thread = threading.Thread(target=run_simulation)
             simulation_thread.daemon = True
             simulation_thread.start()
             return jsonify({"message": "Đã khởi động máy đo 3 phòng."})
     elif action == 'stop':
         is_simulating = False
+        threading.Thread(target=send_telegram_alert, args=("⏹ <b>HỆ THỐNG ĐÃ DỪNG LẤY MẪU</b>",)).start()
         return jsonify({"message": "Đã dừng hệ thống."})
     return jsonify({"error": "Hành động không hợp lệ"}), 400
 
@@ -244,7 +275,6 @@ def index():
 
 if __name__ == '__main__':
     create_clean_sample_excel()
-    # Nhận Port động từ nền tảng Cloud (Render/Koyeb), nếu không có thì chạy cổng 5000 ở Local
+    # Chạy chuẩn cho web Render: lấy PORT động, host 0.0.0.0
     port = int(os.environ.get("PORT", 5000))
-    # Tắt chế độ debug và xóa dòng bật trình duyệt tự động
     socketio.run(app, debug=False, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
