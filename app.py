@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 from flask import Flask, render_template, request, jsonify, send_file
 from flask_socketio import SocketIO
 import threading
@@ -9,6 +11,7 @@ import os
 import pandas as pd
 import requests
 from openpyxl.styles import Font, Alignment
+
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
