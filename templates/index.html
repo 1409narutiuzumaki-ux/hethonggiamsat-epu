@@ -190,25 +190,38 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: action })
-            }).then(res => res.json()).then(data => {
-                if (action === 'start') {
-                    isRunning = true;
-                    document.getElementById('btnStart').disabled = true;
-                    document.getElementById('btnStop').disabled = false;
+            });
+        }
+        const socket = io();
 
+        // ĐOẠN MÃ MỚI: Lắng nghe loa phát thanh từ máy chủ để đồng bộ TẤT CẢ trình duyệt
+        socket.on('system_status', function(data) {
+            if (data.is_simulating) {
+                // Nếu hệ thống đang chạy, bật cờ isRunning và mở khóa vẽ biểu đồ
+                if (!isRunning) {
                     Object.values(roomCharts).forEach(chart => {
                         chart.data.labels = [];
                         chart.data.datasets[0].data = [];
                         chart.update();
                     });
-                } else {
-                    isRunning = false;
-                    document.getElementById('btnStart').disabled = false;
-                    document.getElementById('btnStop').disabled = true;
                 }
-            });
-        }
+                isRunning = true;
+                document.getElementById('btnStart').disabled = true;
+                document.getElementById('btnStop').disabled = false;
+            } else {
+                // Nếu hệ thống đã dừng, khóa tất cả
+                isRunning = false;
+                document.getElementById('btnStart').disabled = false;
+                document.getElementById('btnStop').disabled = true;
+            }
+        });
 
+        socket.on('new_sensor_data', function(msg) {
+            if (!isRunning) return; // Bây giờ isRunning đã được đồng bộ cùng lúc cho mọi người
+            updateRoomPanel("r1", msg.r1, msg.timestamp);
+            updateRoomPanel("r2", msg.r2, msg.timestamp);
+            updateRoomPanel("r3", msg.r3, msg.timestamp);
+        });
         function pushPointToChart(chart, label, value) {
             chart.data.labels.push(label);
             chart.data.datasets[0].data.push(value);
@@ -240,15 +253,6 @@
             pushPointToChart(roomCharts[`${roomKey}_i`], timestamp, data.current);
             pushPointToChart(roomCharts[`${roomKey}_u`], timestamp, data.voltage);
         }
-
-        const socket = io();
-
-        socket.on('new_sensor_data', function(msg) {
-            if (!isRunning) return;
-            updateRoomPanel("r1", msg.r1, msg.timestamp);
-            updateRoomPanel("r2", msg.r2, msg.timestamp);
-            updateRoomPanel("r3", msg.r3, msg.timestamp);
-        });
 
         function downloadPDFReport() {
             fetch('/get_report')
