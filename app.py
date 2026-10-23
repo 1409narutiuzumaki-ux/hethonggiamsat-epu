@@ -1,5 +1,3 @@
-import eventlet
-eventlet.monkey_patch()
 from flask import Flask, render_template, request, jsonify, send_file
 from flask_socketio import SocketIO
 import threading
@@ -12,7 +10,6 @@ import pandas as pd
 import requests
 from openpyxl.styles import Font, Alignment
 
-
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -22,7 +19,7 @@ simulation_thread = None
 # ================= CẤU HÌNH TELEGRAM =================
 # HÃY THAY THẾ BẰNG MÃ BẠN VỪA LẤY ĐƯỢC TỪ TELEGRAM:
 TELEGRAM_TOKEN = "8704242215:AAGEWr6T2R9xYfw4cD5vDfcDudcDpjXPCtg"
-TELEGRAM_CHAT_ID = "-5581435632"
+TELEGRAM_CHAT_ID = "5451991152"
 
 def send_telegram_alert(message):
     """Hàm chạy ngầm gửi tin nhắn đến Telegram"""
@@ -187,16 +184,31 @@ def toggle_simulation():
         if not is_simulating:
             history_stats = init_history()
             is_simulating = True
+            
+            # Gửi lệnh đồng bộ nút bấm đến TẤT CẢ các trình duyệt đang mở
+            socketio.emit('system_status', {'is_simulating': True}) 
+            
             threading.Thread(target=send_telegram_alert, args=("▶️ <b>HỆ THỐNG GIÁM SÁT ĐÃ KHỞI ĐỘNG</b>\nBắt đầu lấy mẫu dữ liệu 3 phòng...",)).start()
             simulation_thread = threading.Thread(target=run_simulation)
             simulation_thread.daemon = True
             simulation_thread.start()
             return jsonify({"message": "Đã khởi động máy đo 3 phòng."})
+            
     elif action == 'stop':
         is_simulating = False
+        
+        # Gửi lệnh đồng bộ dừng đến TẤT CẢ các trình duyệt
+        socketio.emit('system_status', {'is_simulating': False})
+        
         threading.Thread(target=send_telegram_alert, args=("⏹ <b>HỆ THỐNG ĐÃ DỪNG LẤY MẪU</b>",)).start()
         return jsonify({"message": "Đã dừng hệ thống."})
+        
     return jsonify({"error": "Hành động không hợp lệ"}), 400
+
+# Thêm hàm này để đồng bộ trạng thái ngay lập tức cho những người truy cập muộn (Người C, D...)
+@socketio.on('connect')
+def handle_connect():
+    socketio.emit('system_status', {'is_simulating': is_simulating})
 
 @app.route('/get_report', methods=['GET'])
 def get_report():
