@@ -20,8 +20,9 @@ simulation_thread = None
 
 # ================= CẤU HÌNH TELEGRAM =================
 # HÃY THAY THẾ BẰNG MÃ BẠN VỪA LẤY ĐƯỢC TỪ TELEGRAM:
-TELEGRAM_TOKEN = "8704242215:AAGEWr6T2R9xYfw4cD5vDfcDudcDpjXPCtg"
-TELEGRAM_CHAT_ID = "5451991152"
+
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def send_telegram_alert(message):
     """Hàm chạy ngầm gửi tin nhắn đến Telegram"""
