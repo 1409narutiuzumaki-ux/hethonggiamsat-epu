@@ -20,7 +20,6 @@ simulation_thread = None
 
 # ================= CẤU HÌNH TELEGRAM =================
 # HÃY THAY THẾ BẰNG MÃ BẠN VỪA LẤY ĐƯỢC TỪ TELEGRAM:
-
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -71,6 +70,9 @@ def init_history():
     }
 
 history_stats = init_history()
+
+# THÊM BIẾN GỐC Ở ĐÂY ĐỂ TRÁNH LỖI NameError
+thresholds = {"warning": 25.0, "danger": 40.0}
 
 SAMPLE_EXCEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kich_ban_1_pha_chuan.xlsx")
 
