@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Cảnh Báo Quá Tải - 3 Phòng Độc Lập</title>
+    <title Cảnh Báo Quá Tải </title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
@@ -25,14 +25,37 @@
 </head>
 <body>
     <div class="container-fluid px-4 mt-3">
-        <h2 class="text-center mb-3 text-primary fw-bold">HỆ THỐNG GIÁM SÁT SỰ CỐ LƯỚI ĐIỆN HẠ THẾ (3 PHÒNG ĐỘC LẬP)</h2>
-        
+        <h2 class="text-center mb-3 text-primary fw-bold">HỆ THỐNG GIÁM SÁT SỰ CỐ LƯỚI ĐIỆN HẠ THẾ </h2>
+<!-- ====== BẮT ĐẦU: BẢNG CÀI ĐẶT NGƯỠNG LINH ĐỘNG ====== -->
+        <div class="row mb-4 justify-content-center">
+            <div class="col-md-10 col-lg-8">
+                <div class="card p-3 shadow-sm" style="border-top: 4px solid #ffc107;">
+                    <h5 class="text-secondary border-bottom pb-2 mb-3 text-center fw-bold">⚙️ CÀI ĐẶT NGƯỠNG CẢNH BÁO CHUNG (A)</h5>
+                    <div class="row text-center">
+                        <div class="col-md-4 mb-2">
+                            <label class="form-label text-success fw-bold">Mức An Toàn:</label>
+                            <input type="text" id="displaySafe" class="form-control bg-light text-success fw-bold text-center" value="Từ 0 đến 25.0" disabled>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="form-label text-warning fw-bold">Chớm Quá Tải (>):</label>
+                            <input type="number" id="inputWarning" class="form-control text-center fw-bold" value="25.0" step="0.5" oninput="updateSafeDisplay()">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label text-danger fw-bold">Nguy Hiểm (>):</label>
+                            <input type="number" id="inputDanger" class="form-control text-center fw-bold" value="40.0" step="0.5">
+                        </div>
+                    </div>
+                    <button class="btn btn-dark w-100 fw-bold" onclick="updateThresholds()">💾 Lưu Lại Cài Đặt Ngưỡng Mới</button>
+                </div>
+            </div>
+        </div>
+        <!-- ====== KẾT THÚC: BẢNG CÀI ĐẶT NGƯỠNG ====== -->        
         <div class="row mb-4">
             <div class="col-12 text-center">
                 <button id="btnStart" class="btn btn-primary px-4 fw-bold mx-1" onclick="toggleSim('start')">▶ Khởi Động Máy Đo</button>
                 <button id="btnStop" class="btn btn-danger px-4 fw-bold mx-1" onclick="toggleSim('stop')" disabled>■ Dừng Lấy Mẫu</button>
-                <button class="btn btn-warning px-4 fw-bold mx-1" onclick="downloadPDFReport()">📄 Xuất Báo Cáo Phân Tích (PDF)</button>
-                <a href="/internal" target="_blank" class="btn btn-info px-4 fw-bold mx-1">🔍 Mở Chế Độ Phân Tích Nội Bộ</a>
+                <button class="btn btn-warning px-4 fw-bold mx-1" onclick="downloadPDFReport()"> Xuất Báo Cáo Phân Tích </button>
+                <a href="/internal" target="_blank" class="btn btn-info px-4 fw-bold mx-1"> Mở Chế Độ Phân Tích Nội Bộ</a>
             </div>
         </div>
 
@@ -322,6 +345,36 @@
                 html2pdf().set(opt).from(element).save().then(() => {
                     Swal.fire({ icon: 'success', title: 'Hoàn tất', text: 'Báo cáo PDF tổng hợp 3 phòng đã được tải xuống!'});
                 });
+            });
+        }
+// ĐOẠN MÃ MỚI: Xử lý cài đặt ngưỡng trên giao diện
+        function updateSafeDisplay() {
+            const warnVal = document.getElementById('inputWarning').value;
+            document.getElementById('displaySafe').value = "Từ 0 đến " + warnVal;
+        }
+
+        function updateThresholds() {
+            const warningVal = document.getElementById('inputWarning').value;
+            const dangerVal = document.getElementById('inputDanger').value;
+
+            if (parseFloat(warningVal) >= parseFloat(dangerVal)) {
+                Swal.fire({ icon: 'error', title: 'Lỗi logic', text: 'Mức Cảnh Báo phải nhỏ hơn mức Nguy Hiểm!'});
+                return;
+            }
+
+            fetch('/api/update_thresholds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ warning: warningVal, danger: dangerVal })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Đã cập nhật', text: 'Ngưỡng mới đã được áp dụng cho toàn bộ các phòng!'});
+                }
+            })
+            .catch(err => {
+                Swal.fire({ icon: 'error', title: 'Lỗi kết nối', text: 'Không thể gửi dữ liệu lên máy chủ.'});
             });
         }
     </script>
