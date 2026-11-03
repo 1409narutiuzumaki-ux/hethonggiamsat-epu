@@ -109,7 +109,7 @@ def create_clean_sample_excel():
                 cell.alignment = center_align
 
 def run_simulation():
-    global is_simulating, history_stats
+    global is_simulating, history_stats, thresholds
     start_time = time.time()
     base_scenario_idx = 0
     
@@ -136,12 +136,12 @@ def run_simulation():
             
             status = "Safe"
             advice = "Bình thường. Thông số an toàn."
-            if c_val > cfg["thresh_danger"]:
+            if c_val > thresholds["danger"]:
                 status = "Danger"
-                advice = f"NGUY HIỂM: Ngắt aptomat ngay! (Ngưỡng {cfg['thresh_danger']}A)"
-            elif c_val > cfg["thresh_warn"]:
+                advice = f"NGUY HIỂM: Ngắt aptomat ngay! (Ngưỡng {thresholds['danger']}A)"
+            elif c_val > thresholds["warning"]:
                 status = "Warning"
-                advice = f"CẢNH BÁO: Tắt bớt thiết bị. (Ngưỡng {cfg['thresh_warn']}A)"
+                advice = f"CẢNH BÁO: Tắt bớt thiết bị. (Ngưỡng {thresholds['warning']}A)"
                 
             rooms_data[r_key] = {
                 "current": c_val, "voltage": v_val, "status": status, "advice": advice
