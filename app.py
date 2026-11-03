@@ -216,7 +216,35 @@ def handle_connect():
 @app.route('/get_report', methods=['GET'])
 def get_report():
     return jsonify(history_stats)
+# --- API NHẬN NGƯỠNG CẢNH BÁO MỚI TỪ GIAO DIỆN WEB ---
+@app.route('/api/update_thresholds', methods=['POST'])
+def update_thresholds():
+    global thresholds
+    data = request.json
+    try:
+        # Lấy thông số từ web gửi lên
+        new_warning = float(data.get('warning', thresholds['warning']))
+        new_danger = float(data.get('danger', thresholds['danger']))
+        
+        # Kiểm tra logic: Cảnh báo phải nhỏ hơn Nguy hiểm
+        if new_warning >= new_danger:
+            return jsonify({"success": False, "error": "Mức Cảnh Báo phải nhỏ hơn mức Nguy Hiểm!"}), 400
 
+        # Ghi đè vào biến toàn cục của hệ thống
+        thresholds['warning'] = new_warning
+        thresholds['danger'] = new_danger
+        
+        print(f"Đã cập nhật ngưỡng mới: Cảnh báo > {new_warning}A | Nguy hiểm > {new_danger}A")
+        
+        return jsonify({
+            "success": True, 
+            "message": "Đã cập nhật ngưỡng thành công!", 
+            "thresholds": thresholds
+        }), 200
+        
+    except ValueError:
+        return jsonify({"success": False, "error": "Giá trị ngưỡng không hợp lệ"}), 400
+        
 @app.route('/download_sample', methods=['GET'])
 def download_sample():
     if not os.path.exists(SAMPLE_EXCEL_PATH):
